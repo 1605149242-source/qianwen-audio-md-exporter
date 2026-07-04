@@ -1,0 +1,34 @@
+node_modules/
+.env
+.browser-profile/
+.browser-profile-*/
+downloads/
+dist/
+logs/
+summary_batch_runs/
+*.log
+*.tmp
+tmp-*
+__pycache__/
+*.py[cod]
+qianwen-exporter-state.json
+
+# Local one-off batch launchers/status scripts with personal paths.
+run-20*.bat
+run-final.bat
+organize-20*.bat
+status-20*.bat
+status-new-folder.bat
+report-20*.bat
+scripts/run-20*.js
+scripts/organize-20*.js
+scripts/status-*.js
+scripts/report-*.js
+
+# Not included in the first GitHub upload: browser UI and AI summary add-on.
+src/web.js
+src/call_summary_automation.py
+templates/call-summary*.txt
+open-web-ui.bat
+open-web-ui.vbs
+start-web-ui.ps1
