@@ -1,8 +1,9 @@
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs, readNumber } from "../src/utils/args.js";
-import { chunk, safeFilename, titleFromFile } from "../src/utils/files.js";
+import { chunk, findCompleteExportedTitles, safeFilename, titleFromFile } from "../src/utils/files.js";
 import { folderIdFromUrl, summarize } from "../src/qianwen/client.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -41,8 +42,53 @@ const progress = summarize(
 assert(progress.completed === 1, "completed summary");
 assert(progress.notPresent.length === 1, "not present summary");
 
+await assertMultiExportCompletion();
+
 console.log("Smoke check passed.");
 
 function assert(value, label) {
   if (!value) throw new Error(`Assertion failed: ${label}`);
+}
+
+async function assertMultiExportCompletion() {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "qianwen-export-smoke-"));
+  try {
+    const title = "demo";
+    await fs.writeFile(path.join(tempRoot, "demo_原文.md"), "# original\n", "utf8");
+    let complete = await findCompleteExportedTitles(tempRoot, [title], {
+      original: true,
+      originalFormat: "md",
+      guide: true,
+      guideFormat: "pdf",
+      notes: true,
+      notesFormat: "txt"
+    });
+    assert(!complete.has(title), "multi-export incomplete when guide and notes are missing");
+
+    await fs.writeFile(path.join(tempRoot, "demo_导读.pdf"), "guide\n", "utf8");
+    await fs.writeFile(path.join(tempRoot, "demo_笔记.txt"), "notes\n", "utf8");
+    complete = await findCompleteExportedTitles(tempRoot, [title], {
+      original: true,
+      originalFormat: "md",
+      guide: true,
+      guideFormat: "pdf",
+      notes: true,
+      notesFormat: "txt"
+    });
+    assert(complete.has(title), "multi-export complete when all selected document files exist");
+
+    complete = await findCompleteExportedTitles(tempRoot, [title], {
+      original: false,
+      audio: true
+    });
+    assert(!complete.has(title), "audio export incomplete when no audio file exists");
+    await fs.writeFile(path.join(tempRoot, "demo.mp3"), "audio\n", "utf8");
+    complete = await findCompleteExportedTitles(tempRoot, [title], {
+      original: false,
+      audio: true
+    });
+    assert(complete.has(title), "audio export complete when audio file exists");
+  } finally {
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  }
 }

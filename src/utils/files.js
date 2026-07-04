@@ -3,6 +3,8 @@ import path from "node:path";
 
 const AUDIO_EXTENSIONS = new Set([".aac", ".mp3", ".m4a", ".wav", ".mp4"]);
 const ORIGINAL_TEXT = "\u539f\u6587";
+const GUIDE_TEXT = "\u5bfc\u8bfb";
+const NOTES_TEXT = "\u7b14\u8bb0";
 
 export async function assertDirectory(dir, label) {
   const stat = await fs.stat(dir).catch(() => null);
@@ -67,13 +69,56 @@ export async function findExportedTitles(downloadDir, titles, options = {}) {
 
     for (const title of titleList) {
       const safeTitle = safeFilename(title);
-      if (name.startsWith(safeTitle) && markers.some((marker) => name.includes(marker))) {
+      const markerMatched = markers.length === 0 || markers.some((marker) => name.includes(marker));
+      if (name.startsWith(safeTitle) && markerMatched) {
         exported.add(title);
       }
     }
   }
 
   return exported;
+}
+
+export function exportTargetOptions(options = {}) {
+  const targets = [];
+  if (options.original !== false) {
+    targets.push({
+      extensions: [`.${options.originalFormat || "md"}`],
+      markers: [ORIGINAL_TEXT]
+    });
+  }
+  if (options.guide) {
+    targets.push({
+      extensions: [`.${options.guideFormat || "docx"}`],
+      markers: [GUIDE_TEXT]
+    });
+  }
+  if (options.audio) {
+    targets.push({
+      extensions: [".mp3", ".mp4", ".m4a", ".aac", ".wav"],
+      markers: []
+    });
+  }
+  if (options.notes) {
+    targets.push({
+      extensions: [`.${options.notesFormat || "docx"}`],
+      markers: [NOTES_TEXT]
+    });
+  }
+  return targets.length ? targets : [{ extensions: [".md"], markers: [ORIGINAL_TEXT] }];
+}
+
+export async function findCompleteExportedTitles(downloadDir, titles, exportOptions = {}) {
+  const titleList = [...titles];
+  const targets = exportTargetOptions(exportOptions);
+  let complete = new Set(titleList);
+
+  for (const target of targets) {
+    const exported = await findExportedTitles(downloadDir, titleList, target);
+    complete = new Set([...complete].filter((title) => exported.has(title)));
+  }
+
+  return complete;
 }
 
 export async function readJson(file, fallback) {

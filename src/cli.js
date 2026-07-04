@@ -2,7 +2,7 @@
 
 import path from "node:path";
 import { parseArgs, promptMissing, readNumber } from "./utils/args.js";
-import { assertDirectory, ensureDirectory, findExportedTitles, listAudioFiles, readJson, titleFromFile, writeJson } from "./utils/files.js";
+import { assertDirectory, ensureDirectory, findCompleteExportedTitles, listAudioFiles, readJson, titleFromFile, writeJson } from "./utils/files.js";
 import { folderIdFromUrl, QianwenClient, summarize } from "./qianwen/client.js";
 
 const TEXT = {
@@ -145,7 +145,7 @@ async function main(config) {
 
 async function buildCompletionSummary(progress, sourceFiles, state, config) {
   const sourceTitles = sourceFiles.map(titleFromFile);
-  const exportedTitles = await findExportedTitles(config.downloadDir, sourceTitles, exportedTitleOptions(config));
+  const exportedTitles = await findCompleteExportedTitles(config.downloadDir, sourceTitles, config.exportOptions);
   const uploadCandidates = new Set(getUploadCandidates(progress, sourceFiles).map(titleFromFile));
   const abandonedTitles = sourceTitles.filter((title) => uploadCandidates.has(title) && getAttempt(state, title).count >= config.maxRetries);
   const successfulTitles = sourceTitles.filter((title) => exportedTitles.has(title));
@@ -176,7 +176,7 @@ async function exportNewMarkdown(client, records, sourceFiles, config) {
     }
   }
 
-  const exportedTitles = await findExportedTitles(config.downloadDir, completedByTitle.keys(), exportedTitleOptions(config));
+  const exportedTitles = await findCompleteExportedTitles(config.downloadDir, completedByTitle.keys(), config.exportOptions);
   const exportRecords = [...completedByTitle.entries()]
     .filter(([title]) => !exportedTitles.has(title))
     .map(([, record]) => record);
@@ -282,34 +282,6 @@ function normalizeExportOptions(value) {
     notesFormat: allowedNotes.has(value.notesFormat) ? value.notesFormat : "docx",
     originalSpeaker: value.originalSpeaker !== false,
     originalTimestamp: value.originalTimestamp !== false
-  };
-}
-
-function exportedTitleOptions(config) {
-  if (config.exportOptions?.original !== false) {
-    const format = config.exportOptions?.originalFormat || "md";
-    return {
-      extensions: [`.${format}`],
-      markers: ["\u539f\u6587"]
-    };
-  }
-  if (config.exportOptions?.guide) {
-    const format = config.exportOptions?.guideFormat || "docx";
-    return {
-      extensions: [`.${format}`],
-      markers: ["\u5bfc\u8bfb"]
-    };
-  }
-  if (config.exportOptions?.notes) {
-    const format = config.exportOptions?.notesFormat || "docx";
-    return {
-      extensions: [`.${format}`],
-      markers: ["\u7b14\u8bb0"]
-    };
-  }
-  return {
-    extensions: [".md"],
-    markers: ["\u539f\u6587"]
   };
 }
 
