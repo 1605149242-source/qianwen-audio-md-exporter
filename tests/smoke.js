@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs, readNumber } from "../src/utils/args.js";
 import { chunk, findCompleteExportedTitles, safeFilename, titleFromFile } from "../src/utils/files.js";
-import { folderIdFromUrl, summarize } from "../src/qianwen/client.js";
+import { exportDetailsFromOptions, folderIdFromUrl, summarize } from "../src/qianwen/client.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const required = [
@@ -41,6 +41,15 @@ const progress = summarize(
 );
 assert(progress.completed === 1, "completed summary");
 assert(progress.notPresent.length === 1, "not present summary");
+
+const originalWithoutSpeakerOrTimestamp = exportDetailsFromOptions({
+  original: true,
+  originalFormat: "md",
+  originalSpeaker: false,
+  originalTimestamp: false
+}).find((item) => item.docType === 1);
+assert(originalWithoutSpeakerOrTimestamp?.withSpeaker === false, "original export can disable speaker");
+assert(originalWithoutSpeakerOrTimestamp?.withTimeStamp === false, "original export can disable timestamp");
 
 await assertMultiExportCompletion();
 

@@ -474,7 +474,7 @@ function exportHeaders() {
   };
 }
 
-function exportDetailsFromOptions(options = {}) {
+export function exportDetailsFromOptions(options = {}) {
   const details = [];
   const fileTypes = {
     docx: 0,
