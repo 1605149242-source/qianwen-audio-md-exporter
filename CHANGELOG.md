@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - Smoke check for project structure and core utility behavior.
 - Windows executable build script and usage guide.
 - Local browser console for the audio transcription/export workflow.
+- Visible one-click Windows launcher for non-technical users.
 
 ### Changed
 

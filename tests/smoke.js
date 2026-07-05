@@ -21,7 +21,8 @@ const required = [
   "src/utils/files.js",
   "open-web-ui.bat",
   "open-web-ui.vbs",
-  "start-web-ui.ps1"
+  "start-web-ui.ps1",
+  "启动网页控制台.bat"
 ];
 
 for (const relative of required) {

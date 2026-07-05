@@ -46,6 +46,16 @@ It does not include the experimental AI summary page.
 
 Start the web console:
 
+Recommended for Windows users:
+
+```text
+Double-click 启动网页控制台.bat
+```
+
+This launcher checks Node.js, installs dependencies on first run, starts the local web console, and opens the browser.
+
+Manual command:
+
 ```bash
 npm.cmd run web
 ```
@@ -56,7 +66,7 @@ Then open:
 http://127.0.0.1:4317
 ```
 
-On Windows, you can also double-click `open-web-ui.vbs` in the project folder. The page lets you enter the audio folder, transcript download folder, Qianwen URL, transcription settings, export formats, retry limit, and polling interval.
+The page lets you enter the audio folder, transcript download folder, Qianwen URL, transcription settings, export formats, retry limit, and polling interval.
 
 ### CLI
 

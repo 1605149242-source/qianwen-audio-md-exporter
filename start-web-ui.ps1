@@ -6,6 +6,8 @@ $Url = "http://127.0.0.1:$Port/"
 $LogsDir = Join-Path $Root "logs"
 $OutLog = Join-Path $LogsDir "web-ui.out.log"
 $ErrLog = Join-Path $LogsDir "web-ui.err.log"
+$InstallLog = Join-Path $LogsDir "web-ui-install.out.log"
+$InstallErrLog = Join-Path $LogsDir "web-ui-install.err.log"
 $StatusLog = Join-Path $LogsDir "web-ui-launcher.log"
 
 function Write-Status($Message) {
@@ -34,6 +36,31 @@ $node = Get-Command node -ErrorAction SilentlyContinue
 if (-not $node) {
   Write-Status "Node.js was not found in PATH."
   throw "Node.js was not found in PATH. Please install Node.js or add it to PATH."
+}
+
+$npm = Get-Command npm.cmd -ErrorAction SilentlyContinue
+if (-not $npm) {
+  Write-Status "npm.cmd was not found in PATH."
+  throw "npm.cmd was not found in PATH. Please install Node.js LTS from https://nodejs.org/ and reopen this launcher."
+}
+
+$dependencyMarker = Join-Path $Root "node_modules\playwright-core"
+if (-not (Test-Path $dependencyMarker)) {
+  Write-Status "Dependencies not found. Running npm.cmd install."
+  $install = Start-Process `
+    -FilePath $npm.Source `
+    -ArgumentList @("install") `
+    -WorkingDirectory $Root `
+    -WindowStyle Hidden `
+    -RedirectStandardOutput $InstallLog `
+    -RedirectStandardError $InstallErrLog `
+    -Wait `
+    -PassThru
+  if ($install.ExitCode -ne 0) {
+    Write-Status "npm.cmd install failed with exit code $($install.ExitCode). stdout=$InstallLog stderr=$InstallErrLog"
+    throw "npm.cmd install failed. See $InstallLog and $InstallErrLog"
+  }
+  Write-Status "Dependencies installed."
 }
 
 if (Test-WebReady) {

@@ -56,6 +56,10 @@ Minimal project smoke check for structure and core utility behavior.
 
 Windows double-click launcher for the local browser console.
 
+## `启动网页控制台.bat`
+
+Recommended visible Windows launcher for non-technical users. It checks Node.js, installs dependencies on first run, starts the local web console, and opens the browser.
+
 ## `open-web-ui.bat`
 
 Windows batch launcher used by `open-web-ui.vbs`.
