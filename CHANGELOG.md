@@ -13,10 +13,11 @@ All notable changes to this project will be documented in this file.
 - Local file scanner, retry state support, and Markdown export downloader.
 - Smoke check for project structure and core utility behavior.
 - Windows executable build script and usage guide.
+- Local browser console for the audio transcription/export workflow.
 
 ### Changed
 
-- Nothing yet.
+- GitHub upload scope now includes the transcription web console while keeping the experimental AI summary add-on local-only.
 
 ### Deprecated
 

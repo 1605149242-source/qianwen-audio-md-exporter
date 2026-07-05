@@ -39,6 +39,27 @@ PowerShell may block `npm.ps1` on Windows. Use `npm.cmd` when needed.
 
 ## Run
 
+### Browser Console
+
+This GitHub version includes the local browser console for the audio transcription/export workflow.
+It does not include the experimental AI summary page.
+
+Start the web console:
+
+```bash
+npm.cmd run web
+```
+
+Then open:
+
+```text
+http://127.0.0.1:4317
+```
+
+On Windows, you can also double-click `open-web-ui.vbs` in the project folder. The page lets you enter the audio folder, transcript download folder, Qianwen URL, transcription settings, export formats, retry limit, and polling interval.
+
+### CLI
+
 ```bash
 npm.cmd start -- ^
   --upload-dir "D:\Desktop\微信电话录音\2026-05\2026-05-10~05-20" ^

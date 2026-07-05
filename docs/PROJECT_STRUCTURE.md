@@ -32,6 +32,10 @@ User-facing change history.
 
 CLI entry point. Parses options, prompts for missing paths, validates inputs, and calls the Qianwen automation client.
 
+## `src/web.js`
+
+Local browser console for the audio transcription/export workflow. It exposes the form, progress dashboard, and local HTTP API for starting, stopping, previewing, and monitoring transcription jobs.
+
 ## `src/qianwen/client.js`
 
 Browser and Qianwen/Tingwu automation logic.
@@ -47,6 +51,18 @@ Local file scanning, filename matching, and download filename handling.
 ## `tests/smoke.js`
 
 Minimal project smoke check for structure and core utility behavior.
+
+## `open-web-ui.vbs`
+
+Windows double-click launcher for the local browser console.
+
+## `open-web-ui.bat`
+
+Windows batch launcher used by `open-web-ui.vbs`.
+
+## `start-web-ui.ps1`
+
+PowerShell launcher for the local browser console.
 
 ## `examples/`
 

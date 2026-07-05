@@ -25,10 +25,6 @@ scripts/organize-20*.js
 scripts/status-*.js
 scripts/report-*.js
 
-# Not included in the first GitHub upload: browser UI and AI summary add-on.
-src/web.js
+# AI summary add-on is local only for now.
 src/call_summary_automation.py
 templates/call-summary*.txt
-open-web-ui.bat
-open-web-ui.vbs
-start-web-ui.ps1

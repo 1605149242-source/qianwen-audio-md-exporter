@@ -15,9 +15,13 @@ const required = [
   "CHANGELOG.md",
   "docs/DEV_LOG.md",
   "src/cli.js",
+  "src/web.js",
   "src/qianwen/client.js",
   "src/utils/args.js",
-  "src/utils/files.js"
+  "src/utils/files.js",
+  "open-web-ui.bat",
+  "open-web-ui.vbs",
+  "start-web-ui.ps1"
 ];
 
 for (const relative of required) {
@@ -52,6 +56,7 @@ assert(originalWithoutSpeakerOrTimestamp?.withSpeaker === false, "original expor
 assert(originalWithoutSpeakerOrTimestamp?.withTimeStamp === false, "original export can disable timestamp");
 
 await assertMultiExportCompletion();
+await assertWebConsoleScope();
 
 console.log("Smoke check passed.");
 
@@ -99,5 +104,12 @@ async function assertMultiExportCompletion() {
     assert(complete.has(title), "audio export complete when audio file exists");
   } finally {
     await fs.rm(tempRoot, { recursive: true, force: true });
+  }
+}
+
+async function assertWebConsoleScope() {
+  const webSource = await fs.readFile(path.join(root, "src/web.js"), "utf8");
+  for (const marker of ["/api/summary", "call_summary_automation.py", "exportAiSummary", "renderSummaryApp"]) {
+    assert(!webSource.includes(marker), `web console excludes AI summary marker: ${marker}`);
   }
 }
