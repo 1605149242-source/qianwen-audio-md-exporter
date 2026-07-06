@@ -30,7 +30,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- Nothing yet.
+- Count failed upload submissions toward the retry limit, and retry stale in-progress records after the cooldown instead of leaving them active forever.
 
 ### Security
 

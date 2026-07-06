@@ -8,6 +8,7 @@ logs/
 summary_batch_runs/
 *.log
 *.tmp
+*.zip
 tmp-*
 __pycache__/
 *.py[cod]

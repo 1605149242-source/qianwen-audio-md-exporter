@@ -102,18 +102,17 @@ async function main(config) {
         break;
       }
 
-      const uploadCandidates = getUploadCandidates(progress, sourceFiles)
+      const uploadCandidates = getUploadCandidates(progress, sourceFiles, state, config)
         .filter((file) => canUploadAgain(state, titleFromFile(file), config))
         .slice(0, config.batchSize);
 
       if (config.skipUpload) {
-        console.log(`Skip upload is enabled. Upload candidates skipped: ${getUploadCandidates(progress, sourceFiles).length}`);
+        console.log(`Skip upload is enabled. Upload candidates skipped: ${getUploadCandidates(progress, sourceFiles, state, config).length}`);
         break;
       }
 
       if (uploadCandidates.length > 0) {
         console.log(`Uploading missing/failed files: ${uploadCandidates.length}`);
-        await client.uploadFiles(config.folderUrl, uploadCandidates);
         const now = Date.now();
         for (const file of uploadCandidates) {
           const title = titleFromFile(file);
@@ -124,10 +123,16 @@ async function main(config) {
           };
         }
         await writeJson(stateFile, state);
-        console.log(`Upload submitted. Waiting ${config.pollInterval}ms before checking records again...`);
+        try {
+          await client.uploadFiles(config.folderUrl, uploadCandidates);
+          console.log(`Upload submitted. Waiting ${config.pollInterval}ms before checking records again...`);
+        } catch (error) {
+          console.log(`Upload attempt failed: ${error.message || String(error)}`);
+          console.log(`Waiting ${config.pollInterval}ms before retrying...`);
+        }
         await client.page.waitForTimeout(config.pollInterval);
       } else {
-        const allCandidates = getUploadCandidates(progress, sourceFiles);
+        const allCandidates = getUploadCandidates(progress, sourceFiles, state, config);
         const cooling = allCandidates.filter((file) => isCoolingDown(state, titleFromFile(file), config)).length;
         const exhausted = allCandidates.filter((file) => getAttempt(state, titleFromFile(file)).count >= config.maxRetries).length;
         console.log(`Waiting ${config.pollInterval}ms for transcription progress... coolingDown=${cooling}, retryLimitReached=${exhausted}`);
@@ -146,8 +151,7 @@ async function main(config) {
 async function buildCompletionSummary(progress, sourceFiles, state, config) {
   const sourceTitles = sourceFiles.map(titleFromFile);
   const exportedTitles = await findCompleteExportedTitles(config.downloadDir, sourceTitles, config.exportOptions);
-  const uploadCandidates = new Set(getUploadCandidates(progress, sourceFiles).map(titleFromFile));
-  const abandonedTitles = sourceTitles.filter((title) => uploadCandidates.has(title) && getAttempt(state, title).count >= config.maxRetries);
+  const abandonedTitles = sourceTitles.filter((title) => !exportedTitles.has(title) && getAttempt(state, title).count >= config.maxRetries);
   const successfulTitles = sourceTitles.filter((title) => exportedTitles.has(title));
   const activeTitles = sourceTitles.filter((title) => !exportedTitles.has(title) && !abandonedTitles.includes(title));
 
@@ -189,7 +193,7 @@ async function exportNewMarkdown(client, records, sourceFiles, config) {
   return { alreadyExported: exportedTitles.size, newlyExported: saved.length };
 }
 
-function getUploadCandidates(progress, sourceFiles) {
+function getUploadCandidates(progress, sourceFiles, state, config) {
   const fileByTitle = new Map(sourceFiles.map((file) => [titleFromFile(file), file]));
   const pendingTitles = new Set(progress.pendingRecords.map((record) => record.recordTitle));
   const candidates = [];
@@ -202,7 +206,21 @@ function getUploadCandidates(progress, sourceFiles) {
     if (file) candidates.push(file);
   }
 
+  for (const record of progress.pendingRecords) {
+    const file = fileByTitle.get(record.recordTitle);
+    if (file && shouldRetryPendingRecord(state, record.recordTitle, config)) {
+      candidates.push(file);
+    }
+  }
+
   return [...new Map(candidates.map((file) => [titleFromFile(file), file])).values()];
+}
+
+function shouldRetryPendingRecord(state, title, config) {
+  const attempt = getAttempt(state, title);
+  if (attempt.count <= 0) return false;
+  if (attempt.count >= config.maxRetries) return false;
+  return Date.now() - attempt.lastAttemptAt >= config.retryCooldownMinutes * 60 * 1000;
 }
 
 async function moveExistingSourceRecords(client, folderId, sourceFiles) {
