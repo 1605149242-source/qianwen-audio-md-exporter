@@ -102,12 +102,16 @@ async function main(config) {
         break;
       }
 
+      const successfulTitleSet = new Set(summary.successfulTitles);
       const uploadCandidates = getUploadCandidates(progress, sourceFiles, state, config)
+        .filter((file) => !successfulTitleSet.has(titleFromFile(file)))
         .filter((file) => canUploadAgain(state, titleFromFile(file), config))
         .slice(0, config.batchSize);
 
       if (config.skipUpload) {
-        console.log(`Skip upload is enabled. Upload candidates skipped: ${getUploadCandidates(progress, sourceFiles, state, config).length}`);
+        const skipped = getUploadCandidates(progress, sourceFiles, state, config)
+          .filter((file) => !successfulTitleSet.has(titleFromFile(file))).length;
+        console.log(`Skip upload is enabled. Upload candidates skipped: ${skipped}`);
         break;
       }
 
@@ -132,7 +136,8 @@ async function main(config) {
         }
         await client.page.waitForTimeout(config.pollInterval);
       } else {
-        const allCandidates = getUploadCandidates(progress, sourceFiles, state, config);
+        const allCandidates = getUploadCandidates(progress, sourceFiles, state, config)
+          .filter((file) => !successfulTitleSet.has(titleFromFile(file)));
         const cooling = allCandidates.filter((file) => isCoolingDown(state, titleFromFile(file), config)).length;
         const exhausted = allCandidates.filter((file) => getAttempt(state, titleFromFile(file)).count >= config.maxRetries).length;
         console.log(`Waiting ${config.pollInterval}ms for transcription progress... coolingDown=${cooling}, retryLimitReached=${exhausted}`);
