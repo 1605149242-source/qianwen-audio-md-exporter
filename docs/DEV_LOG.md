@@ -1,5 +1,29 @@
 # Development Log
 
+## 2026-07-09
+
+### Completed
+
+- Added failed-transcription rerun state for large batches where most recordings finish but a leftover group reaches the retry limit.
+- Added `--failed-rerun-limit`, defaulting to one extra failed-rerun round.
+- Updated the web console with a `失败后再次转写轮数` setting and status text that shows when a failed-rerun round has started.
+- Kept successful exported recordings excluded from rerun uploads and exports.
+- Added smoke coverage for recoverable exhausted items, rerun state reset, and final failure after the rerun limit is exhausted.
+
+### Why
+
+Large Qianwen batches can leave a small failed group after most recordings are already exported. Those leftovers need a clean second transcription attempt without forcing the user to manually reset state or risk re-uploading successful recordings.
+
+### Modules Affected
+
+- `src/cli.js`
+- `src/web.js`
+- `src/utils/args.js`
+- `src/utils/retry.js`
+- `tests/smoke.js`
+- `README.md`
+- `CHANGELOG.md`
+
 ## 2026-06-02
 
 ### Completed

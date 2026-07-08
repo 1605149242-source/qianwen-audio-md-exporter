@@ -2,9 +2,10 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseArgs, readNumber } from "../src/utils/args.js";
+import { parseArgs, readNonNegativeNumber, readNumber } from "../src/utils/args.js";
 import { chunk, findCompleteExportedTitles, safeFilename, titleFromFile } from "../src/utils/files.js";
 import { exportDetailsFromOptions, folderIdFromUrl, summarize } from "../src/qianwen/client.js";
+import { getAttempt, getFailedRerunCount, hasReachedFinalFailure, startFailedRerun, titlesReadyForFailedRerun } from "../src/utils/retry.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const required = [
@@ -35,6 +36,7 @@ assert(parseArgs(["--upload-dir", "a", "--dry-run"]).uploadDir === "a", "parse u
 assert(parseArgs(["--dry-run"]).dryRun === true, "parse boolean");
 assert(readNumber("12", 1) === 12, "parse number");
 assert(readNumber("bad", 7) === 7, "fallback number");
+assert(readNonNegativeNumber("0", 1) === 0, "parse zero number");
 assert(titleFromFile("D:/x/demo.aac") === "demo", "title from file");
 assert(safeFilename("a:b?.md") === "a_b_.md", "safe filename");
 assert(chunk([1, 2, 3], 2).length === 2, "chunk");
@@ -57,6 +59,7 @@ assert(originalWithoutSpeakerOrTimestamp?.withSpeaker === false, "original expor
 assert(originalWithoutSpeakerOrTimestamp?.withTimeStamp === false, "original export can disable timestamp");
 
 await assertMultiExportCompletion();
+assertFailedRerunState();
 await assertWebConsoleScope();
 
 console.log("Smoke check passed.");
@@ -106,6 +109,26 @@ async function assertMultiExportCompletion() {
   } finally {
     await fs.rm(tempRoot, { recursive: true, force: true });
   }
+}
+
+function assertFailedRerunState() {
+  const config = { maxRetries: 10, failedRerunLimit: 1 };
+  const state = {
+    uploadAttemptsV2: {
+      done: { count: 10, lastAttemptAt: 1 },
+      retry: { count: 10, lastAttemptAt: 1 }
+    },
+    failedRerunsV1: {}
+  };
+  assert(!hasReachedFinalFailure(state, "retry", config), "exhausted title is recoverable before failed rerun");
+  assert(titlesReadyForFailedRerun(state, ["retry"], config).length === 1, "eligible title can start failed rerun");
+  startFailedRerun(state, ["retry"], 123);
+  assert(getAttempt(state, "retry").count === 0, "failed rerun resets attempt count");
+  assert(getAttempt(state, "retry").forceUpload === true, "failed rerun forces next upload");
+  assert(getFailedRerunCount(state, "retry") === 1, "failed rerun count increments");
+  state.uploadAttemptsV2.retry = { count: 10, lastAttemptAt: 456 };
+  assert(hasReachedFinalFailure(state, "retry", config), "title is final failed after rerun is exhausted");
+  assert(titlesReadyForFailedRerun(state, ["done", "retry"], config).length === 0, "mixed final and recoverable titles do not start another group rerun");
 }
 
 async function assertWebConsoleScope() {

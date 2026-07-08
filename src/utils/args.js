@@ -76,6 +76,11 @@ export function readNumber(value, fallback) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+export function readNonNegativeNumber(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
 function printInputPanel() {
   console.log("");
   console.log("======================================================================");

@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 
 import path from "node:path";
-import { parseArgs, promptMissing, readNumber } from "./utils/args.js";
+import { parseArgs, promptMissing, readNonNegativeNumber, readNumber } from "./utils/args.js";
 import { assertDirectory, ensureDirectory, findCompleteExportedTitles, listAudioFiles, readJson, titleFromFile, writeJson } from "./utils/files.js";
+import { ensureRetryState, getAttempt, hasReachedFinalFailure, startFailedRerun, titlesReadyForFailedRerun } from "./utils/retry.js";
 import { folderIdFromUrl, QianwenClient, summarize } from "./qianwen/client.js";
 
 const TEXT = {
@@ -24,6 +25,7 @@ const options = await promptMissing({
   exportBatchSize: readNumber(rawArgs.exportBatchSize, 12),
   pollInterval: readNumber(rawArgs.pollInterval || process.env.POLL_INTERVAL_MS, 10 * 60 * 1000),
   maxRetries: readNumber(rawArgs.maxRetries, 10),
+  failedRerunLimit: readNonNegativeNumber(rawArgs.failedRerunLimit, 1),
   retryCooldownMinutes: readNumber(rawArgs.retryCooldownMinutes, 10),
   useSystemChromeProfile: Boolean(rawArgs.useSystemChromeProfile),
   skipUpload: Boolean(rawArgs.skipUpload),
@@ -48,8 +50,7 @@ async function main(config) {
   let folderId = config.folderUrl ? folderIdFromUrl(config.folderUrl) : "";
   const stateFile = path.join(config.downloadDir, "qianwen-exporter-state.json");
   const state = await readJson(stateFile, { attempts: {} });
-  state.attempts ||= {};
-  state.uploadAttemptsV2 ||= {};
+  ensureRetryState(state);
 
   printRunInfo({
     audioCount: sourceFiles.length,
@@ -94,7 +95,14 @@ async function main(config) {
         console.log(`Markdown export: already=${exportResult.alreadyExported}, newly=${exportResult.newlyExported}`);
       }
 
-      const summary = await buildCompletionSummary(progress, sourceFiles, state, config);
+      let summary = await buildCompletionSummary(progress, sourceFiles, state, config);
+      const rerunTitles = titlesReadyForFailedRerun(state, summary.activeTitles, config);
+      if (rerunTitles.length > 0) {
+        const rerunCount = startFailedRerun(state, rerunTitles);
+        await writeJson(stateFile, state);
+        console.log(`Starting failed transcription rerun for ${rerunCount} recording(s).`);
+        summary = await buildCompletionSummary(progress, sourceFiles, state, config);
+      }
       lastSummary = summary;
       printSummary(summary);
       if (summary.done) {
@@ -156,7 +164,7 @@ async function main(config) {
 async function buildCompletionSummary(progress, sourceFiles, state, config) {
   const sourceTitles = sourceFiles.map(titleFromFile);
   const exportedTitles = await findCompleteExportedTitles(config.downloadDir, sourceTitles, config.exportOptions);
-  const abandonedTitles = sourceTitles.filter((title) => !exportedTitles.has(title) && getAttempt(state, title).count >= config.maxRetries);
+  const abandonedTitles = sourceTitles.filter((title) => !exportedTitles.has(title) && hasReachedFinalFailure(state, title, config));
   const successfulTitles = sourceTitles.filter((title) => exportedTitles.has(title));
   const activeTitles = sourceTitles.filter((title) => !exportedTitles.has(title) && !abandonedTitles.includes(title));
 
@@ -223,6 +231,7 @@ function getUploadCandidates(progress, sourceFiles, state, config) {
 
 function shouldRetryPendingRecord(state, title, config) {
   const attempt = getAttempt(state, title);
+  if (attempt.forceUpload) return true;
   if (attempt.count <= 0) return false;
   if (attempt.count >= config.maxRetries) return false;
   return Date.now() - attempt.lastAttemptAt >= config.retryCooldownMinutes * 60 * 1000;
@@ -248,6 +257,7 @@ async function moveExistingSourceRecords(client, folderId, sourceFiles) {
 
 function canUploadAgain(state, title, config) {
   const attempt = getAttempt(state, title);
+  if (attempt.forceUpload) return true;
   if (attempt.count >= config.maxRetries) return false;
   if (!attempt.lastAttemptAt) return true;
   return Date.now() - attempt.lastAttemptAt >= config.retryCooldownMinutes * 60 * 1000;
@@ -258,14 +268,6 @@ function isCoolingDown(state, title, config) {
   if (!attempt.lastAttemptAt) return false;
   if (attempt.count >= config.maxRetries) return false;
   return Date.now() - attempt.lastAttemptAt < config.retryCooldownMinutes * 60 * 1000;
-}
-
-function getAttempt(state, title) {
-  const value = state.uploadAttemptsV2?.[title];
-  return {
-    count: Number(value?.count || 0),
-    lastAttemptAt: Number(value?.lastAttemptAt || 0)
-  };
 }
 
 function parseExportOptions(raw) {

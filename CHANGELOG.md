@@ -15,10 +15,12 @@ All notable changes to this project will be documented in this file.
 - Windows executable build script and usage guide.
 - Local browser console for the audio transcription/export workflow.
 - Visible one-click Windows launcher for non-technical users.
+- Failed-transcription rerun support: after the rest of a batch has finished, remaining failed recordings can automatically enter one fresh retry round without re-uploading already exported recordings.
 
 ### Changed
 
 - GitHub upload scope now includes the transcription web console while keeping the experimental AI summary add-on local-only.
+- The web console now exposes `失败后再次转写轮数`, defaulting to one extra rerun for failed leftovers.
 
 ### Deprecated
 

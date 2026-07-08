@@ -5,8 +5,9 @@ import http from "node:http";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { parseArgs, readNumber } from "./utils/args.js";
+import { parseArgs, readNonNegativeNumber, readNumber } from "./utils/args.js";
 import { ensureDirectory, findCompleteExportedTitles, listAudioFiles, readJson, titleFromFile } from "./utils/files.js";
+import { getFailedRerunCount, hasReachedFinalFailure } from "./utils/retry.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const logsDir = path.join(root, "logs");
@@ -83,6 +84,7 @@ async function startJob(body) {
   const exportConfig = normalizeExportConfig(body);
   const batchSize = Math.min(readNumber(body.batchSize, defaultBatchSize), qianwenMaxBatchSize);
   const maxRetries = readNumber(body.maxRetries, defaultMaxRetries);
+  const failedRerunLimit = readNonNegativeNumber(body.failedRerunLimit, 1);
   const retryCooldownMinutes = readNumber(body.retryCooldownMinutes, 10);
   const pollIntervalMinutes = readNumber(body.pollIntervalMinutes ?? body.pollInterval, defaultPollIntervalMinutes);
   const pollInterval = pollIntervalMinutes * 60 * 1000;
@@ -99,6 +101,7 @@ async function startJob(body) {
     "--batch-size", String(batchSize),
     "--export-batch-size", String(exportBatchSize),
     "--max-retries", String(maxRetries),
+    "--failed-rerun-limit", String(failedRerunLimit),
     "--retry-cooldown-minutes", String(retryCooldownMinutes),
     "--poll-interval", String(pollInterval)
   ];
@@ -118,6 +121,7 @@ async function startJob(body) {
     batchSize,
     exportBatchSize,
     maxRetries,
+    failedRerunLimit,
     retryCooldownMinutes,
     pollIntervalMinutes,
     pollInterval,
@@ -209,9 +213,10 @@ async function collectStats(job) {
   const stateFile = path.join(job.downloadDir, "qianwen-exporter-state.json");
   const state = await readJson(stateFile, {});
   const attempts = state.uploadAttemptsV2 || {};
-  const failedTitles = titles.filter((title) => !exported.has(title) && Number(attempts[title]?.count || 0) >= job.maxRetries);
+  const failedTitles = titles.filter((title) => !exported.has(title) && hasReachedFinalFailure(state, title, job));
   const activeTitles = titles.filter((title) => !exported.has(title) && !failedTitles.includes(title));
   const attemptValues = Object.values(attempts);
+  const maxFailedRerunCount = titles.reduce((max, title) => Math.max(max, getFailedRerunCount(state, title)), 0);
   return {
     total: titles.length,
     success: exported.size,
@@ -219,6 +224,7 @@ async function collectStats(job) {
     active: activeTitles.length,
     attempted: attemptValues.length,
     maxAttemptCount: attemptValues.reduce((max, item) => Math.max(max, Number(item.count || 0)), 0),
+    maxFailedRerunCount,
     latestAttemptAt: attemptValues.reduce((max, item) => Math.max(max, Number(item.lastAttemptAt || 0)), 0),
     failedTitles,
     activeTitles,
@@ -905,16 +911,28 @@ function renderApp() {
           <div class="field">
             <label for="maxRetries">重试上限</label>
             <input id="maxRetries" type="number" min="1" value="${defaultMaxRetries}">
+            <div class="hint">每一轮单个录音最多尝试次数。</div>
           </div>
         </div>
         <div class="grid-2">
           <div class="field">
+            <label for="failedRerunLimit">失败后再次转写轮数</label>
+            <input id="failedRerunLimit" type="number" min="0" value="1">
+            <div class="hint">大部分录音已成功后，剩余失败项会重新进入队列；填 1 表示额外再跑一轮。</div>
+          </div>
+          <div class="field">
             <label for="retryCooldownMinutes">重试冷却（分钟）</label>
             <input id="retryCooldownMinutes" type="number" min="1" value="10">
           </div>
+        </div>
+        <div class="grid-2">
           <div class="field">
             <label for="pollInterval">检查间隔（分钟）</label>
             <input id="pollInterval" type="number" min="1" value="${defaultPollIntervalMinutes}">
+          </div>
+          <div class="field">
+            <label for="exportBatchSize">每轮导出数量</label>
+            <input id="exportBatchSize" type="number" min="1" value="12">
           </div>
         </div>
         <div class="actions">
@@ -955,7 +973,7 @@ function renderApp() {
   </div>
   <script>
     const $ = (id) => document.getElementById(id);
-    const fields = ["uploadDir", "downloadDir", "folderUrl", "batchSize", "maxRetries", "retryCooldownMinutes", "pollInterval", "language", "translation", "speakerMode", "exportOriginal", "exportGuide", "exportAudio", "exportNotes", "originalFormat", "guideFormat", "notesFormat", "originalSpeaker", "originalTimestamp"];
+    const fields = ["uploadDir", "downloadDir", "folderUrl", "batchSize", "exportBatchSize", "maxRetries", "failedRerunLimit", "retryCooldownMinutes", "pollInterval", "language", "translation", "speakerMode", "exportOriginal", "exportGuide", "exportAudio", "exportNotes", "originalFormat", "guideFormat", "notesFormat", "originalSpeaker", "originalTimestamp"];
     const saved = JSON.parse(localStorage.getItem("qianwenWebUi") || "{}");
     applySaved(saved);
 
@@ -972,7 +990,9 @@ function renderApp() {
         downloadDir: $("downloadDir").value.trim(),
         folderUrl: $("folderUrl").value.trim(),
         batchSize: $("batchSize").value.trim(),
+        exportBatchSize: $("exportBatchSize").value.trim(),
         maxRetries: $("maxRetries").value.trim(),
+        failedRerunLimit: $("failedRerunLimit").value.trim(),
         retryCooldownMinutes: $("retryCooldownMinutes").value.trim(),
         pollInterval: $("pollInterval").value.trim(),
         language: checkedValue("language"),
@@ -996,7 +1016,7 @@ function renderApp() {
       return document.querySelector("input[name=" + CSS.escape(name) + "]:checked")?.value || "";
     }
     function applySaved(data) {
-      for (const key of ["uploadDir", "downloadDir", "folderUrl", "batchSize", "maxRetries", "retryCooldownMinutes", "pollInterval", "originalFormat", "guideFormat", "notesFormat"]) {
+      for (const key of ["uploadDir", "downloadDir", "folderUrl", "batchSize", "exportBatchSize", "maxRetries", "failedRerunLimit", "retryCooldownMinutes", "pollInterval", "originalFormat", "guideFormat", "notesFormat"]) {
         if (data[key] !== undefined && $(key)) $(key).value = data[key];
       }
       if (data.pollInterval !== undefined && $("pollInterval")) {
@@ -1056,13 +1076,16 @@ function renderApp() {
       const success = Number(s.success || 0);
       const active = Number(s.active || 0);
       const failed = Number(s.failed || 0);
+      const rerunCount = Number(s.maxFailedRerunCount || 0);
       $("total").textContent = total;
       $("success").textContent = success;
       $("active").textContent = active;
       $("failed").textContent = failed;
       const percent = total ? Math.round((success + failed) / total * 100) : 0;
       $("progressBar").style.width = percent + "%";
-      $("progressText").textContent = total ? "已完成 " + (success + failed) + "/" + total + "，进度 " + percent + "%" : "等待任务开始";
+      $("progressText").textContent = total
+        ? "已完成 " + (success + failed) + "/" + total + "，进度 " + percent + "%" + (rerunCount ? "，失败重转写轮次 " + rerunCount : "")
+        : "等待任务开始";
 
       renderList("failedList", s.failedTitles || []);
       renderList("activeList", s.activeTitles || []);
@@ -1073,7 +1096,7 @@ function renderApp() {
       $("logs").textContent = lines.join("\\n");
       $("logs").scrollTop = $("logs").scrollHeight;
       if (data.job) {
-        for (const key of ["uploadDir", "downloadDir", "folderUrl", "batchSize", "maxRetries", "retryCooldownMinutes", "pollInterval"]) {
+        for (const key of ["uploadDir", "downloadDir", "folderUrl", "batchSize", "exportBatchSize", "maxRetries", "failedRerunLimit", "retryCooldownMinutes", "pollInterval"]) {
           if (data.job[key] !== undefined && $(key) && !$(key).value) $(key).value = data.job[key];
         }
       }
