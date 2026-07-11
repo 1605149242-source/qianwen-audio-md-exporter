@@ -1,5 +1,28 @@
 # Development Log
 
+## 2026-07-12
+
+### Completed
+
+- Added optional cleanup of completed Qianwen records after their selected local transcript exports are present and non-empty.
+- Confirmed the Qianwen frontend uses `assistant/api/record/task/delete` with `{ recordIds }` for record deletion.
+- Added the web-console option `自动清除已经下载好文字稿的录音记录` near the retry and interval settings.
+- Added UI guidance recommending cleanup for batches over 50 recordings or when Qianwen stores more than 300 recording records.
+- Added smoke checks for the cleanup wiring and delete endpoint string.
+
+### Why
+
+Qianwen's recording list can hit an account-side limit. If completed records remain in Qianwen after local transcript export, large batches may stop admitting later uploads. Cleaning only already-downloaded completed records frees space while preserving local transcript files.
+
+### Modules Affected
+
+- `src/cli.js`
+- `src/web.js`
+- `src/qianwen/client.js`
+- `tests/smoke.js`
+- `README.md`
+- `CHANGELOG.md`
+
 ## 2026-07-09
 
 ### Completed

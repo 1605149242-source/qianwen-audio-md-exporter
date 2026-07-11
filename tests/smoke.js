@@ -61,6 +61,7 @@ assert(originalWithoutSpeakerOrTimestamp?.withTimeStamp === false, "original exp
 await assertMultiExportCompletion();
 assertFailedRerunState();
 await assertWebConsoleScope();
+await assertCompletedRecordCleanupWiring();
 
 console.log("Smoke check passed.");
 
@@ -136,4 +137,14 @@ async function assertWebConsoleScope() {
   for (const marker of ["/api/summary", "call_summary_automation.py", "exportAiSummary", "renderSummaryApp"]) {
     assert(!webSource.includes(marker), `web console excludes AI summary marker: ${marker}`);
   }
+}
+
+async function assertCompletedRecordCleanupWiring() {
+  const webSource = await fs.readFile(path.join(root, "src/web.js"), "utf8");
+  const clientSource = await fs.readFile(path.join(root, "src/qianwen/client.js"), "utf8");
+  const cliSource = await fs.readFile(path.join(root, "src/cli.js"), "utf8");
+  assert(webSource.includes("cleanCompletedRecords"), "web console exposes completed-record cleanup option");
+  assert(webSource.includes("自动清除已经下载好文字稿的录音记录"), "web console labels completed-record cleanup option");
+  assert(clientSource.includes("assistant/api/record/task/delete"), "client uses Qianwen completed-record delete endpoint");
+  assert(cliSource.includes("recordStatus === 30"), "cleanup only considers completed records");
 }

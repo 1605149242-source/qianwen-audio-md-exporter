@@ -212,6 +212,17 @@ export class QianwenClient {
     return this.qianwenPost("assistant/api/file/move", { dirIdStr, recordIds });
   }
 
+  async deleteRecords(recordIds) {
+    if (recordIds.length === 0) return { success: true, deleted: 0 };
+    const deleted = [];
+    for (const ids of chunk([...new Set(recordIds)], 50)) {
+      const result = await this.qianwenPost("assistant/api/record/task/delete", { recordIds: ids });
+      if (!result.success) return { ...result, deleted: deleted.length };
+      deleted.push(...ids);
+    }
+    return { success: true, deleted: deleted.length };
+  }
+
   async qianwenPost(url, data) {
     return this.evaluateWithRetry(url, () => this.page.evaluate(`(async () => {
       const url = ${JSON.stringify(url)};

@@ -82,6 +82,7 @@ async function startJob(body) {
   const folderUrl = cleanPath(body.folderUrl);
   const transcriptConfig = normalizeTranscriptConfig(body);
   const exportConfig = normalizeExportConfig(body);
+  const cleanCompletedRecords = Boolean(body.cleanCompletedRecords);
   const batchSize = Math.min(readNumber(body.batchSize, defaultBatchSize), qianwenMaxBatchSize);
   const maxRetries = readNumber(body.maxRetries, defaultMaxRetries);
   const failedRerunLimit = readNonNegativeNumber(body.failedRerunLimit, 1);
@@ -106,6 +107,7 @@ async function startJob(body) {
     "--poll-interval", String(pollInterval)
   ];
   if (folderUrl) cliArgs.push("--folder-url", folderUrl);
+  if (cleanCompletedRecords) cliArgs.push("--clean-completed-records");
   cliArgs.push("--speaker-mode", transcriptConfig.speakerMode);
   cliArgs.push("--export-options", JSON.stringify(exportConfig));
 
@@ -118,6 +120,7 @@ async function startJob(body) {
     profileDir,
     transcriptConfig,
     exportConfig,
+    cleanCompletedRecords,
     batchSize,
     exportBatchSize,
     maxRetries,
@@ -535,6 +538,7 @@ function renderApp() {
     }
     .segmented input,
     .export-row input[type="checkbox"],
+    .option-card input[type="checkbox"],
     .info-tags input {
       position: absolute;
       opacity: 0;
@@ -568,6 +572,13 @@ function renderApp() {
       border-radius: 8px;
       padding: 12px;
       background: #fff;
+    }
+    .option-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: #fff;
+      margin: 0 0 14px;
     }
     .export-head {
       display: flex;
@@ -925,6 +936,10 @@ function renderApp() {
             <input id="retryCooldownMinutes" type="number" min="1" value="10">
           </div>
         </div>
+        <div class="option-card">
+          <label class="export-head"><input id="cleanCompletedRecords" type="checkbox"><span class="checkmark"></span><span>自动清除已经下载好文字稿的录音记录</span></label>
+          <div class="hint">只清除本地已经完整导出的千问完成记录（一次性要转写超过50条录音或千问中存放录音记录超过300条时推荐使用）。</div>
+        </div>
         <div class="grid-2">
           <div class="field">
             <label for="pollInterval">检查间隔（分钟）</label>
@@ -973,7 +988,7 @@ function renderApp() {
   </div>
   <script>
     const $ = (id) => document.getElementById(id);
-    const fields = ["uploadDir", "downloadDir", "folderUrl", "batchSize", "exportBatchSize", "maxRetries", "failedRerunLimit", "retryCooldownMinutes", "pollInterval", "language", "translation", "speakerMode", "exportOriginal", "exportGuide", "exportAudio", "exportNotes", "originalFormat", "guideFormat", "notesFormat", "originalSpeaker", "originalTimestamp"];
+    const fields = ["uploadDir", "downloadDir", "folderUrl", "batchSize", "exportBatchSize", "maxRetries", "failedRerunLimit", "retryCooldownMinutes", "pollInterval", "language", "translation", "speakerMode", "exportOriginal", "exportGuide", "exportAudio", "exportNotes", "cleanCompletedRecords", "originalFormat", "guideFormat", "notesFormat", "originalSpeaker", "originalTimestamp"];
     const saved = JSON.parse(localStorage.getItem("qianwenWebUi") || "{}");
     applySaved(saved);
 
@@ -1002,6 +1017,7 @@ function renderApp() {
         exportGuide: $("exportGuide").checked,
         exportAudio: $("exportAudio").checked,
         exportNotes: $("exportNotes").checked,
+        cleanCompletedRecords: $("cleanCompletedRecords").checked,
         originalFormat: $("originalFormat").value,
         guideFormat: $("guideFormat").value,
         notesFormat: $("notesFormat").value,
@@ -1029,7 +1045,7 @@ function renderApp() {
           if (radio) radio.checked = true;
         }
       }
-      for (const key of ["exportOriginal", "exportGuide", "exportAudio", "exportNotes", "originalSpeaker", "originalTimestamp"]) {
+      for (const key of ["exportOriginal", "exportGuide", "exportAudio", "exportNotes", "cleanCompletedRecords", "originalSpeaker", "originalTimestamp"]) {
         if (data[key] !== undefined && $(key)) $(key).checked = Boolean(data[key]);
       }
     }

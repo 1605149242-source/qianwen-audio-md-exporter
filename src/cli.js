@@ -29,6 +29,7 @@ const options = await promptMissing({
   retryCooldownMinutes: readNumber(rawArgs.retryCooldownMinutes, 10),
   useSystemChromeProfile: Boolean(rawArgs.useSystemChromeProfile),
   skipUpload: Boolean(rawArgs.skipUpload),
+  cleanCompletedRecords: Boolean(rawArgs.cleanCompletedRecords),
   speakerMode: rawArgs.speakerMode || "multi",
   exportOptions: parseExportOptions(rawArgs.exportOptions),
   chromeProfileName: rawArgs.chromeProfileName,
@@ -58,7 +59,8 @@ async function main(config) {
     downloadDir: config.downloadDir,
     folderName,
     folderId,
-    folderUrl: config.folderUrl
+    folderUrl: config.folderUrl,
+    cleanCompletedRecords: config.cleanCompletedRecords
   });
 
   if (config.dryRun) {
@@ -93,6 +95,15 @@ async function main(config) {
       const exportResult = await exportNewMarkdown(client, records, sourceFiles, config);
       if (exportResult.newlyExported > 0 || exportResult.alreadyExported > 0) {
         console.log(`Markdown export: already=${exportResult.alreadyExported}, newly=${exportResult.newlyExported}`);
+      }
+
+      if (config.cleanCompletedRecords) {
+        const cleanup = await cleanCompletedQianwenRecords(client, records, sourceFiles, config);
+        if (cleanup.deleted > 0) {
+          console.log(`Cleaned completed Qianwen records: ${cleanup.deleted}`);
+        } else if (cleanup.error) {
+          console.log(`Clean completed Qianwen records skipped: ${cleanup.error}`);
+        }
       }
 
       let summary = await buildCompletionSummary(progress, sourceFiles, state, config);
@@ -204,6 +215,31 @@ async function exportNewMarkdown(client, records, sourceFiles, config) {
 
   const saved = await client.exportMarkdown(exportRecords, config.downloadDir, config.exportBatchSize);
   return { alreadyExported: exportedTitles.size, newlyExported: saved.length };
+}
+
+async function cleanCompletedQianwenRecords(client, records, sourceFiles, config) {
+  const sourceTitles = sourceFiles.map(titleFromFile);
+  const sourceTitleSet = new Set(sourceTitles);
+  const exportedTitles = await findCompleteExportedTitles(config.downloadDir, sourceTitles, config.exportOptions);
+  const recordIds = records
+    .filter((record) => record.recordStatus === 30)
+    .filter((record) => sourceTitleSet.has(record.recordTitle))
+    .filter((record) => exportedTitles.has(record.recordTitle))
+    .map((record) => record.recordId)
+    .filter(Boolean);
+
+  const uniqueRecordIds = [...new Set(recordIds)];
+  if (uniqueRecordIds.length === 0) return { deleted: 0 };
+
+  try {
+    const result = await client.deleteRecords(uniqueRecordIds);
+    if (!result.success) {
+      return { deleted: Number(result.deleted || 0), error: JSON.stringify(result) };
+    }
+    return { deleted: Number(result.deleted || uniqueRecordIds.length) };
+  } catch (error) {
+    return { deleted: 0, error: error.message || String(error) };
+  }
 }
 
 function getUploadCandidates(progress, sourceFiles, state, config) {
@@ -325,7 +361,8 @@ function printRunInfo(info) {
     `\u6587\u5b57\u7a3f\u4e0b\u8f7d\u8def\u5f84 : ${info.downloadDir}`,
     `\u5343\u95ee\u6587\u4ef6\u5939     : ${info.folderName}`,
     `\u7f51\u9875\u5730\u5740       : ${info.folderUrl || TEXT.autoFolder}`,
-    `\u6587\u4ef6\u5939 ID      : ${info.folderId || "-"}`
+    `\u6587\u4ef6\u5939 ID      : ${info.folderId || "-"}`,
+    `\u81ea\u52a8\u6e05\u7406\u5b8c\u6210\u8bb0\u5f55 : ${info.cleanCompletedRecords ? "\u5f00\u542f" : "\u5173\u95ed"}`
   ]);
 }
 

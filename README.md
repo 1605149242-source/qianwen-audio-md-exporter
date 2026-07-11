@@ -16,6 +16,7 @@ Qianwen/Tingwu can transcribe uploaded audio and export original text, but doing
 - Poll Qianwen records until source files are transcribed.
 - Retry files that never appear in the target folder.
 - Start an extra failed-transcription rerun for remaining failed files after the rest of the batch has finished.
+- Optionally clear Qianwen records after their transcripts have been fully downloaded locally, reducing the chance of hitting Qianwen's record-list limit during large batches.
 - Export completed records as original text Markdown with speaker and timestamp enabled.
 - Download each record as an individual `.md` file.
 
@@ -67,7 +68,7 @@ Then open:
 http://127.0.0.1:4317
 ```
 
-The page lets you enter the audio folder, transcript download folder, Qianwen URL, transcription settings, export formats, retry limit, failed-rerun limit, and polling interval.
+The page lets you enter the audio folder, transcript download folder, Qianwen URL, transcription settings, export formats, retry limit, failed-rerun limit, completed-record cleanup, and polling interval.
 
 ### CLI
 
@@ -110,6 +111,15 @@ Do not commit real cookies, tokens, account passwords, or browser profile files.
 The retry limit controls one transcription round. When a large batch mostly succeeds but some recordings reach the retry limit, the tool waits until all other recordings have either exported successfully or reached the same limit. Then it can start an extra failed-transcription rerun for those remaining files.
 
 In the web console, `失败后再次转写轮数` defaults to `1`. For example, with retry limit `10` and failed-rerun limit `1`, a stuck recording can get up to 10 attempts in the first round, then one fresh rerun round with up to 10 more attempts. Already exported recordings are not uploaded or exported again.
+
+### Completed Record Cleanup
+
+The web console includes `自动清除已经下载好文字稿的录音记录`. When enabled, the tool deletes only Qianwen records that meet both conditions:
+
+- The Qianwen record is completed.
+- The selected local export files for that recording already exist and are non-empty.
+
+This is recommended when processing more than 50 recordings at once or when the Qianwen account already stores more than 300 recording records. It helps avoid Qianwen's record-list limit blocking later uploads. Local transcript files are not deleted.
 
 ## Project Structure
 
